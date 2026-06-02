@@ -458,6 +458,19 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(true);
   const lastProcessedUserIdRef = useRef(null);
 
+  const requestGuestOnboarding = () => {
+    setShowLanding(false);
+    const savedStore = localStorage.getItem("catetin-store-name");
+    if (!savedStore) {
+      setShowSetup(true);
+    } else {
+      setStoreName(savedStore);
+    }
+    if (!localStorage.getItem("catetin-guest-id")) {
+      getGuestId();
+    }
+  };
+
   // Safe URL hash cleaner to remove trailing # and OAuth fragments while keeping other query parameters
   const cleanAuthHash = () => {
     if (typeof window === "undefined") return;
@@ -1003,7 +1016,19 @@ export default function Home() {
     .reduce((s, tx) => s + tx.amount, 0);
   const totalProfit = totalIncome - totalExpense;
 
-  if (!mounted || authLoading) {
+  // 1. Initial hydration guard: Server and client initial render must be identical.
+  if (!mounted) {
+    if (typeof window === "undefined") {
+      console.log("[SSR_RENDER] rendering initial loading shell");
+    } else {
+      console.log("[CLIENT_MOUNT] rendering initial loading shell during hydration");
+    }
+    return <div className="min-h-screen bg-[#0C0C0B]" />;
+  }
+
+  // 2. Auth Loading state (only shown on client after mounting, to avoid SSR mismatch)
+  if (authLoading) {
+    console.log(`[AUTH_LOADING] auth is still loading. user: ${user ? user.id : 'null'}`);
     return (
       <div className="min-h-screen w-full bg-[#FAF9F6] dark:bg-[#0C0C0B] flex flex-col items-center justify-center transition-colors duration-300 select-none">
         <div className="flex flex-col items-center gap-6 animate-fade-in">
@@ -1034,6 +1059,8 @@ export default function Home() {
       </div>
     );
   }
+
+  console.log(`[SHOW_LANDING] showLanding: ${showLanding}, [USER_STATE] user: ${user ? user.id : 'null'}, [THEME_STATE] theme: ${theme}`);
 
   if (showLanding) {
     return (
