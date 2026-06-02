@@ -453,41 +453,32 @@ export default function Home() {
   const [showLanding, setShowLanding] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [authResolved, setAuthResolved] = useState(false);
-  const [pendingGuestStart, setPendingGuestStart] = useState(false);
-  const authSessionUserIdRef = useRef(null);
-  const authInitRef = useRef(false);
-  const profileChannelRef = useRef(null);
   const keyboardTimerRef = useRef(null);
 
-  const requestGuestOnboarding = () => {
+  const [authLoading, setAuthLoading] = useState(true);
+  const lastProcessedUserIdRef = useRef(null);
+
+  // Safe URL hash cleaner to remove trailing # and OAuth fragments while keeping other query parameters
+  const cleanAuthHash = () => {
     if (typeof window === "undefined") return;
-    setPendingGuestStart(true);
-    setShowLanding(false);
-    if (!localStorage.getItem("catetin-guest-id")) {
-      getGuestId();
+    const href = window.location.href;
+    const hash = window.location.hash;
+    
+    if (
+      hash.includes("access_token=") ||
+      hash.includes("id_token=") ||
+      hash.includes("error_description=") ||
+      href.endsWith("#") ||
+      href.includes("/#")
+    ) {
+      const cleanUrl = window.location.pathname + window.location.search;
+      window.history.replaceState({}, document.title, cleanUrl);
     }
   };
 
-  useEffect(() => {
-    if (!authResolved || !pendingGuestStart) return;
-
-    const savedStore = localStorage.getItem("catetin-store-name")?.trim();
-    if (!savedStore) {
-      setShowSetup(true);
-    }
-    setPendingGuestStart(false);
-  }, [authResolved, pendingGuestStart]);
-
   // ── Theme & Store Name & Period & Auth & Demo init ──────────────────
   useEffect(() => {
-    if (authInitRef.current) return;
-    authInitRef.current = true;
-
-    cleanOAuthHashFragment();
     setMounted(true);
-
     const savedTheme = localStorage.getItem("catetin-theme") || "dark";
     setTheme(savedTheme);
     document.documentElement.classList.toggle("dark", savedTheme === "dark");
@@ -495,22 +486,15 @@ export default function Home() {
     const savedPeriod = localStorage.getItem("catetin-period") || "all";
     setActivePeriod(savedPeriod);
 
-    const savedStoreName =
-      localStorage.getItem("catetin-store-name")?.trim() || null;
-    if (savedStoreName) {
-      setStoreName(savedStoreName);
-    }
-
-    if (
-      typeof window !== "undefined" &&
-      "serviceWorker" in navigator &&
-      !window.__catetinSWRegistered
-    ) {
+    // Register Service Worker for PWA
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch((err) => {
         console.error("Service Worker registration failed: ", err);
       });
-      window.__catetinSWRegistered = true;
     }
+
+    // Clean any trailing hash on mount
+    cleanAuthHash();
 
     // ── visualViewport keyboard detection ──────────────────────────
     const vv = window.visualViewport;
@@ -519,7 +503,7 @@ export default function Home() {
       const handleViewportResize = () => {
         const windowHeight = window.innerHeight;
         const viewportHeight = vv.height;
-        const isKbOpen = windowHeight - viewportHeight > KEYBOARD_THRESHOLD;
+        const isKbOpen = (windowHeight - viewportHeight) > KEYBOARD_THRESHOLD;
         // Debounce to avoid flicker during orientation changes
         clearTimeout(keyboardTimerRef.current);
         keyboardTimerRef.current = setTimeout(() => {
@@ -528,110 +512,52 @@ export default function Home() {
       };
       vv.addEventListener("resize", handleViewportResize);
       vv.addEventListener("scroll", handleViewportResize);
+      // Cleanup will be handled below
       const cleanupVV = () => {
         vv.removeEventListener("resize", handleViewportResize);
         vv.removeEventListener("scroll", handleViewportResize);
         clearTimeout(keyboardTimerRef.current);
       };
+      // Store cleanup for the return function
       window.__catVVCleanup = cleanupVV;
     }
 
     const isDemoMode = localStorage.getItem("catetin-demo") === "true";
     setIsDemo(isDemoMode);
 
-    const initializeAuth = async () => {
-      if (isDemoMode) {
-        setTransactions(getDemoTransactions().map(dbToApp));
-        setStoreName("Kedai Kopi Bahagia");
-        setShowLanding(false);
-        setLoading(false);
-        setAuthResolved(true);
-        setIsInitialLoading(false);
-        return;
-      }
+    if (isDemoMode) {
+      setTransactions(getDemoTransactions().map(dbToApp));
+      setStoreName("Kedai Kopi Bahagia");
+      setShowLanding(false);
+      setLoading(false);
+      setAuthLoading(false);
+    }
 
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const currentUser = session?.user ?? null;
-        authSessionUserIdRef.current = currentUser?.id ?? null;
-        setUser(currentUser);
-
-        if (currentUser) {
-          setShowLanding(false);
-          const profile = await fetchOrCreateProfile(
-            currentUser.id,
-            savedStoreName,
-          );
-          if (profile?.store_name?.trim()) {
-            setStoreName(profile.store_name.trim());
-            localStorage.setItem(
-              "catetin-store-name",
-              profile.store_name.trim(),
-            );
-            setShowSetup(false);
-          } else {
-            setStoreName(savedStoreName || "");
-            setShowSetup(true);
-          }
-          fetchTransactions(currentUser.id);
-        } else if (savedStoreName) {
-          setStoreName(savedStoreName);
-          setShowLanding(false);
-          fetchTransactions(null);
-        } else {
-          setShowLanding(true);
-          fetchTransactions(null);
-        }
-      } catch (err) {
-        console.error("App initialization failed", err);
-        if (savedStoreName) {
-          setStoreName(savedStoreName);
-          setShowLanding(false);
-        } else {
-          setShowLanding(true);
-        }
-        fetchTransactions(null);
-      } finally {
-        setAuthResolved(true);
-        setIsInitialLoading(false);
-      }
-    };
-
-    initializeAuth();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Single consolidated auth changes listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const currentUser = session?.user ?? null;
-      const currentUserId = currentUser?.id ?? null;
 
-      if (
-        event === "SIGNED_IN" &&
-        currentUserId &&
-        currentUserId === authSessionUserIdRef.current
-      ) {
-        return;
-      }
+      if (currentUser) {
+        setUser(currentUser);
+        setShowLanding(false);
+        setAuthLoading(false);
 
-      authSessionUserIdRef.current = currentUserId;
-      setUser(currentUser);
+        // Prevent double initialization for the same user
+        if (lastProcessedUserIdRef.current === currentUser.id) {
+          return;
+        }
+        lastProcessedUserIdRef.current = currentUser.id;
 
-      if (event === "SIGNED_IN" && currentUser) {
         setIsDemo(false);
         localStorage.removeItem("catetin-demo");
-        setShowLanding(false);
 
-        const savedStore =
-          localStorage.getItem("catetin-store-name")?.trim() || null;
+        // Trigger first-time store profile fetch/migration
+        const savedStore = localStorage.getItem("catetin-store-name");
         const profile = await fetchOrCreateProfile(currentUser.id, savedStore);
-        if (profile?.store_name?.trim()) {
-          setStoreName(profile.store_name.trim());
-          localStorage.setItem("catetin-store-name", profile.store_name.trim());
-          setShowSetup(false);
+        if (profile && profile.store_name && profile.store_name !== "Toko Baru") {
+          setStoreName(profile.store_name);
+          localStorage.setItem("catetin-store-name", profile.store_name);
         } else {
-          setStoreName(savedStore || "");
           setShowSetup(true);
         }
 
@@ -653,12 +579,10 @@ export default function Home() {
         } else {
           fetchTransactions(currentUser.id);
         }
+
+        // Cleanup OAuth hash and credentials immediately
+        cleanAuthHash();
         setShowLoginModal(false);
-      } else if (event === "SIGNED_OUT") {
-        authSessionUserIdRef.current = null;
-        setIsDemo(false);
-        localStorage.removeItem("catetin-demo");
-        localStorage.removeItem("catetin-store-name");
         setStoreName("");
         setShowLanding(true);
         fetchTransactions(null);
@@ -1079,34 +1003,37 @@ export default function Home() {
     .reduce((s, tx) => s + tx.amount, 0);
   const totalProfit = totalIncome - totalExpense;
 
-  const renderInitialLoading = () => (
-    <div className="min-h-screen bg-[#0C0C0B] text-zinc-100 flex items-center justify-center px-6">
-      <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-[#111214]/95 p-8 shadow-2xl shadow-emerald-500/10 backdrop-blur-xl transition-opacity duration-500">
-        <div className="flex items-center justify-center h-16 w-16 rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-400 shadow-2xl shadow-emerald-500/20 mx-auto">
-          <Sparkles className="h-8 w-8 text-white" />
-        </div>
-        <div className="mt-6 space-y-4 text-center">
-          <div className="h-3 rounded-full bg-zinc-800 animate-pulse mx-auto w-3/5" />
-          <div className="h-3 rounded-full bg-zinc-800 animate-pulse mx-auto w-2/5" />
-          <p className="mt-3 text-sm text-zinc-400">
-            Menyiapkan Catetin AI... Memuat data dengan aman agar tampilan tidak
-            melompat.
-          </p>
-        </div>
-        <div className="mt-8 grid gap-3">
-          {[1, 2, 3].map((idx) => (
-            <div
-              key={idx}
-              className="h-12 rounded-3xl bg-zinc-900/80 animate-pulse"
-            />
-          ))}
+  if (!mounted || authLoading) {
+    return (
+      <div className="min-h-screen w-full bg-[#FAF9F6] dark:bg-[#0C0C0B] flex flex-col items-center justify-center transition-colors duration-300 select-none">
+        <div className="flex flex-col items-center gap-6 animate-fade-in">
+          {/* Brand Logo / Icon */}
+          <div className="relative">
+            {/* Pulsing Outer Ring */}
+            <div className="absolute -inset-4 rounded-full bg-emerald-500/10 dark:bg-emerald-500/5 blur-xl animate-pulse" style={{ animationDuration: '3s' }} />
+            
+            {/* Main Logo Container */}
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl border border-stone-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-950 shadow-md">
+              <BrainCircuit className="h-10 w-10 text-emerald-500 animate-pulse" />
+            </div>
+          </div>
+
+          {/* Typography */}
+          <div className="text-center space-y-2">
+            <h2 className="text-lg font-black tracking-tight text-zinc-950 dark:text-white uppercase">
+              Catetin<span className="text-emerald-500">.AI</span>
+            </h2>
+            <div className="flex items-center gap-1.5 justify-center">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+              <p className="text-[11px] font-bold text-zinc-400 dark:text-zinc-500 tracking-wider uppercase animate-pulse">
+                Menghubungkan Akun...
+              </p>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  );
-
-  if (!mounted) return <div className="min-h-screen bg-[#0C0C0B]" />;
-  if (isInitialLoading) return renderInitialLoading();
+    );
+  }
 
   if (showLanding) {
     return (

@@ -1,98 +1,109 @@
-const STATIC_CACHE_NAME = "catetin-static-v2";
-const PAGE_CACHE_NAME = "catetin-pages-v2";
-const ASSETS_TO_CACHE = [
-  "/",
+const STATIC_CACHE = "catetin-static-v2";
+const PAGES_CACHE = "catetin-pages-v2";
+
+const STATIC_ASSETS = [
   "/manifest.json",
   "/favicon.ico",
   "/android-chrome-192x192.png",
   "/android-chrome-512x512.png",
 ];
 
-async function cacheFirst(request) {
-  const cachedResponse = await caches.match(request);
-  if (cachedResponse) return cachedResponse;
+const PAGES_ASSETS = [
+  "/",
+];
 
-  try {
-    const response = await fetch(request);
-    if (response && response.status === 200 && response.type === "basic") {
-      const cache = await caches.open(STATIC_CACHE_NAME);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch (err) {
-    return caches.match("/");
-  }
-}
-
-async function networkFirst(request) {
-  try {
-    const response = await fetch(request);
-    if (response && response.status === 200 && response.type === "basic") {
-      const cache = await caches.open(PAGE_CACHE_NAME);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch (err) {
-    const cachedResponse = await caches.match(request);
-    return cachedResponse || caches.match("/");
-  }
-}
-
-// Install Event: cache static shell assets
+// Install Event: cache static shell assets and pages
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(STATIC_CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    }),
+    Promise.all([
+      caches.open(STATIC_CACHE).then((cache) => cache.addAll(STATIC_ASSETS)),
+      caches.open(PAGES_CACHE).then((cache) => cache.addAll(PAGES_ASSETS)),
+    ])
   );
   self.skipWaiting();
 });
 
 // Activate Event: clear old caches
 self.addEventListener("activate", (event) => {
+  const allowedCaches = [STATIC_CACHE, PAGES_CACHE];
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== STATIC_CACHE_NAME && key !== PAGE_CACHE_NAME) {
+          if (!allowedCaches.includes(key)) {
+            console.log("Removing old cache version:", key);
             return caches.delete(key);
           }
-        }),
+        })
       );
-    }),
+    })
   );
   self.clients.claim();
 });
 
-// Fetch Event: respond using navigation-first for pages and cache-first for assets
+// Fetch Event: respond from cache or fetch from network
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
   const url = new URL(event.request.url);
+  // Only intercept same-origin requests to avoid caching supabase/google APIs
   if (url.origin !== self.location.origin) return;
 
-  const request = event.request;
-  const isNavigation =
-    request.mode === "navigate" || request.destination === "document";
-  const isStaticAsset = [
-    "style",
-    "script",
-    "image",
-    "font",
-    "manifest",
-    "audio",
-    "video",
-  ].includes(request.destination);
+  // Never intercept /api/ endpoints
+  if (url.pathname.startsWith("/api/")) return;
+
+  const isNavigation = event.request.mode === "navigate" || 
+    (event.request.headers.get("accept") && event.request.headers.get("accept").includes("text/html"));
 
   if (isNavigation) {
-    event.respondWith(networkFirst(request));
-    return;
-  }
+    // Network-First strategy for HTML / Navigations
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (
+            networkResponse &&
+            networkResponse.status === 200 &&
+            networkResponse.type === "basic"
+          ) {
+            const responseToCache = networkResponse.clone();
+            caches.open(PAGES_CACHE).then((cache) => {
+              cache.put(event.request, responseToCache);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // If offline and request fails, try serving from page cache
+          return caches.match(event.request).then((cachedResponse) => {
+            if (cachedResponse) return cachedResponse;
+            return caches.match("/");
+          });
+        })
+    );
+  } else {
+    // Cache-First strategy for static assets
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
 
-  if (isStaticAsset || ASSETS_TO_CACHE.includes(url.pathname)) {
-    event.respondWith(cacheFirst(request));
-    return;
+        return fetch(event.request)
+          .then((networkResponse) => {
+            if (
+              networkResponse &&
+              networkResponse.status === 200 &&
+              networkResponse.type === "basic"
+            ) {
+              const responseToCache = networkResponse.clone();
+              caches.open(STATIC_CACHE).then((cache) => {
+                cache.put(event.request, responseToCache);
+              });
+            }
+            return networkResponse;
+          })
+          .catch(() => {
+            return new Response("Offline", { status: 503, statusText: "Offline" });
+          });
+      })
+    );
   }
-
-  event.respondWith(networkFirst(request));
 });
