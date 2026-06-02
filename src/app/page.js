@@ -457,6 +457,7 @@ export default function Home() {
 
   const [authLoading, setAuthLoading] = useState(true);
   const lastProcessedUserIdRef = useRef(null);
+  const profileChannelRef = useRef(null);
 
   const requestGuestOnboarding = () => {
     setShowLanding(false);
