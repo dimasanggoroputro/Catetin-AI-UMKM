@@ -82,25 +82,31 @@ export async function POST(req) {
     console.log("Cleaned base64 payload prefix successfully.");
 
     const systemInstruction = `
-Kamu adalah modul OCR & parsing keuangan pintar khusus untuk UMKM Indonesia.
-Tugas kamu adalah menganalisa foto struk belanja, faktur, nota, atau tagihan secara presisi.
+Kamu adalah modul OCR & parsing dokumen keuangan pintar khusus untuk UMKM Indonesia.
+Tugas kamu adalah menganalisa foto struk belanja, faktur, nota, tagihan, catatan buku kas, catatan penjualan/pembelian tulisan tangan, atau daftar transaksi informal secara presisi.
 
-PANDUAN PARSING:
-1. Deteksi apakah gambar benar-benar merupakan struk belanja, nota, kuitansi, faktur, atau bukti pembayaran yang valid. Jika tidak valid/kurang jelas, kembalikan 'success: false' dan kosongkan list item.
-2. Identifikasi merchant/nama toko (jika ada).
-3. Ekstrak setiap baris item belanja/pemasukan secara terperinci.
-4. Klasifikasikan tipe transaksi: sebagian besar struk belanja adalah "expense" (pengeluaran), kecuali jika struk tersebut adalah bukti penjualan/penerimaan uang toko ("income").
-5. Kategorikan setiap item ke salah satu kategori ini:
-   - "food": Makanan, minuman, bahan dapur, kopi, makan siang, cemilan.
-   - "shopping": Belanja perlengkapan toko, alat tulis, sabun cuci, kantong plastik, barang operasional harian.
-   - "bills": Tagihan listrik, air, internet wifi, pulsa, token.
-   - "salary": Gaji karyawan, upah harian.
-   - "rent": Sewa toko, sewa lapak bulanan/tahunan.
-   - "other": Item lain yang tidak masuk kategori di atas.
-6. Bersihkan nama item dari angka, simbol harga, atau kuantitas. Buat menjadi Title Case (kapitalisasi huruf depan tiap kata, e.g. "Minyak Goreng Bimoli").
-7. Ekstrak nominal total belanja per item (qty * unit price) secara bersih dalam angka Rupiah tanpa simbol Rp atau titik/koma ribuan.
-8. Deteksi kuantitas (qty) dan satuan unit yang jelas (e.g. "kg", "gram", "g", "liter", "ml", "pcs", "biji", "bungkus", "pack", "botol", "dus", "sachet", "porsi", "gelas").
-   Wajib deteksi unit ini jika ada di teks struk (misal '2 kg Gula' -> qty=2, unit='kg'). Jangan pernah mengembalikan null jika ada satuan unit yang jelas tertera di struk.
+PANDUAN PARSING & EKSTRAKSI SEMANTIK:
+1. Analisa gambar yang diberikan. Gambar bisa berupa struk belanja tercetak, nota pembelian, faktur, invoice, buku kas tulisan tangan, catatan coretan transaksi di kertas, atau daftar pemasukan/pengeluaran informal.
+2. Jangan langsung mengembalikan 'success: false' hanya karena gambar tidak terlihat seperti struk cetak resmi. Selama ada teks berisi catatan transaksi keuangan (pemasukan atau pengeluaran) yang bisa dibaca dan diekstrak, kembalikan 'success: true'.
+3. Identifikasi jenis dokumen keuangan yang dideteksi (misal: "Struk Belanja", "Nota Pembelian", "Invoice", "Buku Kas Tulisan Tangan", "Catatan Transaksi", "Coretan Manual", atau "Informal Text").
+4. Identifikasi merchant/nama toko (jika ada). Jika berupa catatan manual, nama toko mungkin tidak ada, kembalikan null atau kosongkan.
+5. Lakukan Ekstraksi Transaksi Semantik:
+   - Ekstrak baris transaksi baik dari format tabel (struk/invoice) maupun dari kalimat bebas informal (contoh: "jual mobil Honda 5 unit 500jt", "beli gas lpg 3 biji 66rb", "pemasukan katering bu endang 2.5jt", "bayar kontrakan 12 juta").
+   - Untuk setiap transaksi yang diekstrak, tentukan:
+     * 'item': Nama barang/transaksi bersih dan rapi (Title Case). Contoh: "Mobil Honda", "Gas LPG", "Katering Bu Endang", "Kontrakan".
+     * 'amount': Nominal total transaksi bersih (qty * harga satuan) dalam Rupiah tanpa simbol Rp atau titik/koma ribuan. Contoh: 500000000, 66000, 2500000, 12000000.
+     * 'qty': Jumlah unit/kuantitas (angka). Jika tidak disebutkan secara eksplisit, gunakan default 1.
+     * 'unit': Satuan unit yang terdeteksi (e.g. "pcs", "kg", "unit", "bungkus", "keranjang", "box", "liter"). Jika tidak ada, gunakan null.
+     * 'type': Tipe transaksi ("income" jika pemasukan/penjualan, "expense" jika pengeluaran/pembelian). Lakukan analisa semantik (kata seperti "jual", "terima", "masuk", "omset", "pemasukan" menandakan "income", sedangkan kata seperti "beli", "bayar", "belanja", "pengeluaran", "ongkos" menandakan "expense").
+     * 'category': Kategorikan transaksi ke salah satu dari kategori berikut:
+       - "food": Makanan, minuman, katering, bahan dapur, kopi, makan siang, cemilan.
+       - "shopping": Belanja perlengkapan toko, alat tulis, kendaraan operasional, sabun cuci, barang operasional harian.
+       - "bills": Tagihan listrik, air, internet wifi, pulsa, token.
+       - "salary": Gaji karyawan, upah harian.
+       - "rent": Sewa toko, sewa lapak bulanan/tahunan, sewa kontrakan.
+       - "other": Item lain yang tidak masuk kategori di atas.
+     * 'confidence': Estimasi tingkat kejelasan/keyakinan ekstraksi item ini (nilai decimal dari 0.0 sampai 1.0). Gunakan nilai yang lebih rendah (misal 0.5 - 0.7) untuk tulisan tangan yang buram atau coretan yang kurang terbaca, dan nilai tinggi (0.9 - 1.0) untuk teks cetak yang jelas.
+6. Jika tulisan tangan kurang jelas, lakukan best-effort extraction menggunakan konteks kalimat sekitarnya. Jangan langsung gagal kecuali gambar benar-benar kosong, buram total, atau tidak mengandung informasi transaksi sekali pun.
 `;
 
     console.log("Initializing Google Generative AI...");
@@ -111,8 +117,10 @@ PANDUAN PARSING:
     });
 
     const prompt = `
-Analisa struk ini dan kembalikan data dalam bentuk JSON terstruktur sesuai schema.
-Pastikan tidak berhalusinasi. Jika gambar bukan struk pembayaran/nota/faktur, kembalikan success=false.
+Analisa dokumen keuangan atau catatan transaksi ini dan kembalikan data dalam bentuk JSON terstruktur sesuai schema.
+Buku kas tulisan tangan, catatan coretan manual, daftar transaksi, atau kalimat informal semuanya valid.
+Pastikan melakukan ekstraksi semantik yang akurat untuk setiap baris transaksi.
+Hanya kembalikan success=false jika gambar benar-benar kosong, bukan dokumen/catatan keuangan, atau tidak ada data transaksi yang dapat dikenali sama sekali.
 `;
 
     console.log("Sending payload to Gemini 2.5 Flash Vision...");
@@ -139,16 +147,21 @@ Pastikan tidak berhalusinasi. Jika gambar bukan struk pembayaran/nota/faktur, ke
             success: {
               type: "boolean",
               description:
-                "True jika gambar adalah struk/nota valid dan berhasil diproses. False jika bukan struk atau gambar rusak/tidak terbaca.",
+                "True jika berhasil mengekstrak minimal satu transaksi keuangan dari dokumen/catatan. False jika tidak ada transaksi yang dapat dikenali sama sekali.",
             },
             merchantName: {
               type: "string",
               description:
                 "Nama toko/merchant (e.g. 'Indomaret'). Kosongkan atau null jika tidak terdeteksi.",
             },
+            documentType: {
+              type: "string",
+              description:
+                "Jenis dokumen keuangan yang dideteksi (e.g. 'Struk Belanja', 'Invoice', 'Buku Kas Tulisan Tangan', 'Catatan Transaksi').",
+            },
             items: {
               type: "array",
-              description: "Daftar item transaksi yang ditemukan di struk.",
+              description: "Daftar item transaksi yang berhasil diekstrak.",
               items: {
                 type: "object",
                 properties: {
@@ -156,26 +169,26 @@ Pastikan tidak berhalusinasi. Jika gambar bukan struk pembayaran/nota/faktur, ke
                     type: "string",
                     enum: ["income", "expense"],
                     description:
-                      "Tipe transaksi. Default adalah 'expense' untuk belanja.",
+                      "Tipe transaksi: 'income' (pemasukan/penjualan) atau 'expense' (pengeluaran/pembelian).",
                   },
                   item: {
                     type: "string",
                     description:
-                      "Nama barang yang dibeli/dijual bersih dan rapi (Title Case). E.g. 'Gula Pasir'.",
+                      "Nama barang/transaksi bersih (Title Case). E.g. 'Gula Pasir', 'Beli Kopi'.",
                   },
                   qty: {
                     type: "number",
-                    description: "Jumlah unit barang.",
+                    description: "Jumlah unit barang (default 1 jika tidak ada).",
                   },
                   unit: {
                     type: "string",
                     description:
-                      "Satuan unit (e.g. 'pcs', 'kg', 'porsi') atau null jika tidak ada.",
+                      "Satuan unit (e.g. 'pcs', 'kg', 'unit', 'bungkus') atau null jika tidak ada.",
                   },
                   amount: {
                     type: "number",
                     description:
-                      "Total harga transaksi untuk baris item ini saja (bukan harga satuan).",
+                      "Total nominal transaksi untuk item ini (bukan harga satuan).",
                   },
                   category: {
                     type: "string",
@@ -187,7 +200,12 @@ Pastikan tidak berhalusinasi. Jika gambar bukan struk pembayaran/nota/faktur, ke
                       "rent",
                       "other",
                     ],
-                    description: "Klasifikasi kategori item tersebut.",
+                    description: "Kategori klasifikasi transaksi.",
+                  },
+                  confidence: {
+                    type: "number",
+                    description:
+                      "Tingkat kejelasan/confidence score (0.0 sampai 1.0).",
                   },
                 },
                 required: ["type", "item", "qty", "amount", "category"],
@@ -264,7 +282,7 @@ Pastikan tidak berhalusinasi. Jika gambar bukan struk pembayaran/nota/faktur, ke
       {
         error: "API_ERROR",
         message:
-          "Gagal membaca struk. Coba ambil foto yang lebih jelas dengan pencahayaan yang cukup.",
+          "Gagal memproses dokumen. Coba ambil foto yang lebih jelas dengan pencahayaan yang cukup.",
       },
       { status: 500 },
     );

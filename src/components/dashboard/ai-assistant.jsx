@@ -758,7 +758,7 @@ export default function AIAssistant({
               <button
                 onClick={onScanClick}
                 className="flex h-10 w-10 lg:h-8 lg:w-8 shrink-0 items-center justify-center rounded-full border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-500 shadow-3xs transition-all cursor-pointer active:scale-90 mb-0.5"
-                title="Scan struk belanja"
+                title="Scan Dokumen"
               >
                 <Camera className="h-5 w-5 lg:h-4 lg:w-4" />
               </button>

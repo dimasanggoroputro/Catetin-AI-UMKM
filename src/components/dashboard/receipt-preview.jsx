@@ -118,15 +118,8 @@ function AccordionHeader({ item, index, isOpen, onToggle, onDelete, catConfig })
         )}
       </div>
 
-      {/* Delete & Chevron */}
+      {/* Chevron */}
       <div className="flex items-center gap-1 shrink-0">
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-500 dark:text-zinc-500 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors cursor-pointer duration-200"
-          title="Hapus Item"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
         <div className="text-zinc-400 transition-transform duration-300" style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
           <ChevronDown className="h-4 w-4" />
         </div>
@@ -435,7 +428,7 @@ export default function ReceiptPreview({ items = [], onSave, onCancel, merchantN
           </div>
         )}
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 mb-3">
           <button
             onClick={handleAddItem}
             className="flex-1 py-3 rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 border border-stone-200/60 dark:border-zinc-700/80 hover:bg-zinc-200/70"

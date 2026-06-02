@@ -165,8 +165,8 @@ export default function Navbar({
             <button
               onClick={onScanClick}
               className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 shadow-2xs transition-all duration-300 cursor-pointer active:scale-95"
-              aria-label="Scan Struk Belanja"
-              title="Scan Struk Belanja"
+              aria-label="Scan Dokumen"
+              title="Scan Dokumen"
             >
               <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </button>

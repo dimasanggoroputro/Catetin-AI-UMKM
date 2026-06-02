@@ -132,7 +132,7 @@ export default function ReceiptScanner({ onSave, onClose }) {
       const data = await res.json();
       if (!data.success) {
         throw new Error(
-          "Struk tidak terbaca atau format kurang jelas. Coba foto ulang dengan cahaya lebih terang.",
+          "Dokumen tidak dapat diproses atau tidak ada transaksi yang dikenali. Coba foto ulang dengan cahaya lebih terang.",
         );
       }
 
@@ -206,10 +206,10 @@ export default function ReceiptScanner({ onSave, onClose }) {
             <Camera className="h-6 w-6" />
           </div>
           <h3 className="text-base font-extrabold text-zinc-900 dark:text-white leading-tight">
-            Scan Struk Belanja
+            Scan Dokumen Keuangan
           </h3>
           <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400 font-medium max-w-[280px] mx-auto leading-relaxed">
-            Foto nota atau struk belanja toko Bos. AI akan membaca item,
+            Foto struk, nota, invoice, atau catatan transaksi tulisan tangan toko Bos. AI akan membaca item,
             nominal, dan kategori secara otomatis.
           </p>
         </div>
@@ -247,7 +247,7 @@ export default function ReceiptScanner({ onSave, onClose }) {
               )}
             >
               <Camera className="h-4.5 w-4.5 stroke-[2.5]" />
-              Ambil Foto Struk
+              Ambil Foto Dokumen
             </button>
 
             <button
@@ -301,7 +301,7 @@ export default function ReceiptScanner({ onSave, onClose }) {
             <p className="mt-2 text-[11px] text-zinc-400 font-medium max-w-[240px] leading-relaxed">
               {status === "compressing"
                 ? "Sedang mempersiapkan dan mengompresi gambar..."
-                : "Membaca teks struk menggunakan Gemini Vision..."}
+                : "Membaca teks dokumen menggunakan Gemini Vision..."}
             </p>
           </div>
         )}
@@ -314,7 +314,7 @@ export default function ReceiptScanner({ onSave, onClose }) {
             </div>
             <div className="space-y-1">
               <h4 className="text-xs font-black text-rose-600 dark:text-rose-400">
-                Pembacaan Struk Gagal
+                Pembacaan Dokumen Gagal
               </h4>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium leading-relaxed">
                 {errorMsg}

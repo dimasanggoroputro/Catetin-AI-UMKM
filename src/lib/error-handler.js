@@ -84,7 +84,7 @@ const ERROR_PATTERNS = {
   },
   OCR_FAILED: {
     regex:
-      /unreadable receipt|no text detected|failed to extract|empty ocr|could not analyze receipt|struk tidak terbaca|ocr failed|extraction failed|no.*text|unreadable/i,
+      /unreadable receipt|no text detected|failed to extract|empty ocr|could not analyze receipt|struk tidak terbaca|dokumen tidak terbaca|dokumen tidak dapat diproses|ocr failed|extraction failed|no.*text|unreadable/i,
     code: "OCR_FAILED",
   },
   CAMERA_DENIED: {
@@ -289,11 +289,11 @@ export const mapAppError = (error, context = "UNKNOWN") => {
       return {
         title: "Scanner Parsing Error",
         message:
-          "Scanner berhasil membaca gambar, tapi data struk belum bisa diproses.",
+          "Scanner berhasil membaca gambar, tapi data dokumen belum bisa diproses.",
         severity: "error",
         retryable: true,
         userMessage:
-          "Scanner berhasil membaca gambar, tapi data struk belum bisa diproses.",
+          "Scanner berhasil membaca gambar, tapi data dokumen belum bisa diproses.",
       };
     }
 
@@ -331,18 +331,18 @@ export const mapAppError = (error, context = "UNKNOWN") => {
       return {
         title: "OCR Failed",
         message:
-          "Struk kurang jelas dibaca. Coba foto ulang dengan cahaya lebih terang.",
+          "Dokumen kurang jelas dibaca. Coba foto ulang dengan cahaya lebih terang.",
         severity: "error",
         retryable: true,
         userMessage:
-          "Struk kurang jelas dibaca. Coba foto ulang dengan cahaya lebih terang.",
+          "Dokumen kurang jelas dibaca. Coba foto ulang dengan cahaya lebih terang.",
       };
     }
 
     if (pattern === "CAMERA_DENIED") {
       return {
         title: "Camera Permission Denied",
-        message: "Aplikasi membutuhkan akses kamera untuk scan struk.",
+        message: "Aplikasi membutuhkan akses kamera untuk scan dokumen.",
         severity: "error",
         retryable: false,
         userMessage: "Izin kamera ditolak. Aktifkan di pengaturan perangkat.",
@@ -362,10 +362,10 @@ export const mapAppError = (error, context = "UNKNOWN") => {
     // Default OCR error
     return {
       title: "Processing Failed",
-      message: "Gagal memproses struk. Coba gambar yang lebih jelas.",
+      message: "Gagal memproses dokumen. Coba gambar yang lebih jelas.",
       severity: "error",
       retryable: true,
-      userMessage: "Gagal membaca struk. Coba ambil ulang dengan lebih jelas.",
+      userMessage: "Gagal membaca dokumen. Coba ambil ulang dengan lebih jelas.",
     };
   }
 
