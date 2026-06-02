@@ -546,14 +546,40 @@ export default function Home() {
       setAuthLoading(false);
     }
 
+    // Failsafe timeout: if auth doesn't resolve within 5 seconds, force-unlock the UI
+    const authTimeoutId = setTimeout(() => {
+      setAuthLoading((prev) => {
+        if (prev) {
+          console.warn("[AUTH_TIMEOUT_FALLBACK] Auth did not resolve in 5s, forcing authLoading=false");
+          return false;
+        }
+        return prev;
+      });
+    }, 5000);
+
     // Single consolidated auth changes listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const currentUser = session?.user ?? null;
+      console.log(`[AUTH_EVENT_RECEIVED] event: ${event}, user: ${currentUser ? currentUser.id : 'null'}`);
+
+      // Clear the failsafe timeout since we got a response
+      clearTimeout(authTimeoutId);
+
+      if (event === "TOKEN_REFRESHED") {
+        console.log("[TOKEN_REFRESHED] Token refreshed, updating user ref");
+        if (currentUser) {
+          setUser(currentUser);
+        }
+        return;
+      }
 
       if (currentUser) {
+        // ── User is authenticated (INITIAL_SESSION with session, or SIGNED_IN) ──
+        console.log(`[${event}] User authenticated: ${currentUser.id}`);
         setUser(currentUser);
         setShowLanding(false);
         setAuthLoading(false);
+        console.log("[AUTH_LOADING_FALSE] auth resolved with user");
 
         // Prevent double initialization for the same user
         if (lastProcessedUserIdRef.current === currentUser.id) {
@@ -596,13 +622,39 @@ export default function Home() {
         // Cleanup OAuth hash and credentials immediately
         cleanAuthHash();
         setShowLoginModal(false);
-        setStoreName("");
-        setShowLanding(true);
-        fetchTransactions(null);
+      } else {
+        // ── No user (INITIAL_SESSION without session, or SIGNED_OUT) ──
+        console.log(`[${event}] No authenticated user`);
+        setUser(null);
+        lastProcessedUserIdRef.current = null;
+
+        if (event === "SIGNED_OUT") {
+          setIsDemo(false);
+          localStorage.removeItem("catetin-demo");
+          localStorage.removeItem("catetin-store-name");
+          setStoreName("");
+          setShowLanding(true);
+          fetchTransactions(null);
+          cleanAuthHash();
+        } else {
+          // INITIAL_SESSION with no user — check for guest/local state
+          const savedStore = localStorage.getItem("catetin-store-name");
+          if (savedStore) {
+            setStoreName(savedStore);
+            setShowLanding(false);
+          } else {
+            setShowLanding(true);
+          }
+          fetchTransactions(null);
+        }
+
+        setAuthLoading(false);
+        console.log("[AUTH_LOADING_FALSE] auth resolved without user");
       }
     });
 
     return () => {
+      clearTimeout(authTimeoutId);
       subscription.unsubscribe();
       if (window.__catVVCleanup) {
         window.__catVVCleanup();
