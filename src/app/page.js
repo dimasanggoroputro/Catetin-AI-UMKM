@@ -1300,7 +1300,7 @@ export default function Home() {
         {/* Bottom nav — hides smoothly when keyboard is open, uses separate bottomNavVisible state */}
         <div
           className={cn(
-            "fixed bottom-0 left-0 right-0 z-40 backdrop-blur-lg bg-white/90 dark:bg-[#0E0E0E]/90 border-t border-stone-200/50 dark:border-zinc-800/60 px-8 py-3.5 flex items-center justify-around bottom-nav-transition",
+            "shrink-0 z-40 backdrop-blur-lg bg-white/90 dark:bg-[#0E0E0E]/90 border-t border-stone-200/50 dark:border-zinc-800/60 px-8 py-3.5 flex items-center justify-around bottom-nav-transition",
             !bottomNavVisible && "bottom-nav-hidden",
           )}
           style={{ paddingBottom: "max(14px, env(safe-area-inset-bottom))" }}

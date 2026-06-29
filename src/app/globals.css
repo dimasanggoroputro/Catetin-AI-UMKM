@@ -257,9 +257,10 @@ body.no-scroll-ios {
   will-change: transform, opacity;
 }
 .bottom-nav-hidden {
-  transform: translateY(100%);
+  transform: translateY(100%);   
   opacity: 0;
   pointer-events: none;
+  visibility: hidden;            
 }
 
 /* Input bar smooth keyboard transition */
