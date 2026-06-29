@@ -454,6 +454,7 @@ export default function Home() {
   const [showScanner, setShowScanner] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [bottomNavVisible, setBottomNavVisible] = useState(true);
+  const [viewportHeight, setViewportHeight] = useState(null);
   const keyboardTimerRef = useRef(null);
   const bottomNavTimerRef = useRef(null);
 
@@ -522,23 +523,22 @@ export default function Home() {
         const viewportHeight = vv.height;
         const isKbOpen = (windowHeight - viewportHeight) > KEYBOARD_THRESHOLD;
 
-        // Cancel any pending timers
+        setViewportHeight(Math.round(vv.height)); // ← tambah ini
+
         clearTimeout(keyboardTimerRef.current);
         clearTimeout(bottomNavTimerRef.current);
 
         if (isKbOpen) {
-          // Keyboard opened: hide bottom nav IMMEDIATELY, no flicker
           setKeyboardOpen(true);
           setBottomNavVisible(false);
         } else {
-          // Keyboard closed: update keyboardOpen right away for layout,
-          // but delay showing bottom nav 200ms to avoid layout jump
           setKeyboardOpen(false);
           bottomNavTimerRef.current = setTimeout(() => {
             setBottomNavVisible(true);
           }, 200);
         }
       };
+
       vv.addEventListener("resize", handleViewportResize);
       vv.addEventListener("scroll", handleViewportResize);
       const cleanupVV = () => {
@@ -1258,10 +1258,11 @@ export default function Home() {
       {/* ── Mobile & Tablet (<1024px): full-width, bottom nav ── */}
       <div
         className={cn(
-          "lg:hidden flex flex-col h-dvh fixed inset-0 overflow-hidden",
+          "lg:hidden flex flex-col fixed inset-0 overflow-hidden",  // hapus h-dvh
           isDemo ? "pt-[108px]" : "pt-[72px]",
           keyboardOpen ? "pb-0" : "pb-[68px]",
         )}
+        style={{ height: viewportHeight ? `${viewportHeight}px` : '100dvh' }}  // ← ini
       >
         {activeTab === "chat" && (
           <div className="flex-1 flex flex-col overflow-hidden">
