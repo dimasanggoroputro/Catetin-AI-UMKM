@@ -453,10 +453,7 @@ export default function Home() {
   const [showLanding, setShowLanding] = useState(true);
   const [showScanner, setShowScanner] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
-  const [bottomNavVisible, setBottomNavVisible] = useState(true);
-  const [viewportHeight, setViewportHeight] = useState(null);
   const keyboardTimerRef = useRef(null);
-  const bottomNavTimerRef = useRef(null);
 
   const [authLoading, setAuthLoading] = useState(true);
   const lastProcessedUserIdRef = useRef(null);
@@ -514,39 +511,28 @@ export default function Home() {
     cleanAuthHash();
 
     // ── visualViewport keyboard detection ──────────────────────────
-    // Per spec: use visualViewport as single source of truth, not resize event
     const vv = window.visualViewport;
     if (vv) {
-      const KEYBOARD_THRESHOLD = 150; // px shrink to classify as keyboard open
+      const KEYBOARD_THRESHOLD = 150; // px difference to consider keyboard open
       const handleViewportResize = () => {
         const windowHeight = window.innerHeight;
         const viewportHeight = vv.height;
         const isKbOpen = (windowHeight - viewportHeight) > KEYBOARD_THRESHOLD;
-
-        setViewportHeight(Math.round(vv.height)); // ← tambah ini
-
+        // Debounce to avoid flicker during orientation changes
         clearTimeout(keyboardTimerRef.current);
-        clearTimeout(bottomNavTimerRef.current);
-
-        if (isKbOpen) {
-          setKeyboardOpen(true);
-          setBottomNavVisible(false);
-        } else {
-          setKeyboardOpen(false);
-          bottomNavTimerRef.current = setTimeout(() => {
-            setBottomNavVisible(true);
-          }, 200);
-        }
+        keyboardTimerRef.current = setTimeout(() => {
+          setKeyboardOpen(isKbOpen);
+        }, 50);
       };
-
       vv.addEventListener("resize", handleViewportResize);
       vv.addEventListener("scroll", handleViewportResize);
+      // Cleanup will be handled below
       const cleanupVV = () => {
         vv.removeEventListener("resize", handleViewportResize);
         vv.removeEventListener("scroll", handleViewportResize);
         clearTimeout(keyboardTimerRef.current);
-        clearTimeout(bottomNavTimerRef.current);
       };
+      // Store cleanup for the return function
       window.__catVVCleanup = cleanupVV;
     }
 
@@ -1258,11 +1244,10 @@ export default function Home() {
       {/* ── Mobile & Tablet (<1024px): full-width, bottom nav ── */}
       <div
         className={cn(
-          "lg:hidden flex flex-col fixed inset-0 overflow-hidden",  // hapus h-dvh
+          "lg:hidden flex flex-col h-dvh fixed inset-0 overflow-hidden",
           isDemo ? "pt-[108px]" : "pt-[72px]",
           keyboardOpen ? "pb-0" : "pb-[68px]",
         )}
-        style={{ height: viewportHeight ? `${viewportHeight}px` : '100dvh' }}  // ← ini
       >
         {activeTab === "chat" && (
           <div className="flex-1 flex flex-col overflow-hidden">
@@ -1298,13 +1283,12 @@ export default function Home() {
           />
         )}
 
-        {/* Bottom nav — hides smoothly when keyboard is open, uses separate bottomNavVisible state */}
+        {/* Bottom nav — hides smoothly when keyboard is open */}
         <div
           className={cn(
-            "shrink-0 z-40 backdrop-blur-lg bg-white/90 dark:bg-[#0E0E0E]/90 border-t border-stone-200/50 dark:border-zinc-800/60 px-8 py-3.5 flex items-center justify-around bottom-nav-transition",
-            !bottomNavVisible && "bottom-nav-hidden",
+            "fixed bottom-0 left-0 right-0 z-40 backdrop-blur-lg bg-white/90 dark:bg-[#0E0E0E]/90 border-t border-stone-200/50 dark:border-zinc-800/60 px-8 py-3.5 flex items-center justify-around safe-area-bottom bottom-nav-transition",
+            keyboardOpen && "bottom-nav-hidden",
           )}
-          style={{ paddingBottom: "max(14px, env(safe-area-inset-bottom))" }}
         >
           {[
             { id: "kas", label: "Buku Kas", Icon: BarChart3 },

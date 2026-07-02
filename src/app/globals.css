@@ -250,17 +250,16 @@ body.no-scroll-ios {
   overflow: hidden !important;
 }
 
-/* Bottom nav smooth hide/show transition — per keyboard-navigation-fix.md */
+/* Bottom nav smooth hide/show transition */
 .bottom-nav-transition {
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.18s ease;
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.22s ease;
   will-change: transform, opacity;
 }
 .bottom-nav-hidden {
-  transform: translateY(100%);   
+  transform: translateY(100%);
   opacity: 0;
   pointer-events: none;
-  visibility: hidden;            
 }
 
 /* Input bar smooth keyboard transition */
