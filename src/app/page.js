@@ -477,7 +477,7 @@ export default function Home() {
     if (typeof window === "undefined") return;
     const href = window.location.href;
     const hash = window.location.hash;
-    
+
     if (
       hash.includes("access_token=") ||
       hash.includes("id_token=") ||
@@ -517,7 +517,7 @@ export default function Home() {
       const handleViewportResize = () => {
         const windowHeight = window.innerHeight;
         const viewportHeight = vv.height;
-        const isKbOpen = (windowHeight - viewportHeight) > KEYBOARD_THRESHOLD;
+        const isKbOpen = windowHeight - viewportHeight > KEYBOARD_THRESHOLD;
         // Debounce to avoid flicker during orientation changes
         clearTimeout(keyboardTimerRef.current);
         keyboardTimerRef.current = setTimeout(() => {
@@ -551,7 +551,9 @@ export default function Home() {
     const authTimeoutId = setTimeout(() => {
       setAuthLoading((prev) => {
         if (prev) {
-          console.warn("[AUTH_TIMEOUT_FALLBACK] Auth did not resolve in 5s, forcing authLoading=false");
+          console.warn(
+            "[AUTH_TIMEOUT_FALLBACK] Auth did not resolve in 5s, forcing authLoading=false",
+          );
           return false;
         }
         return prev;
@@ -559,9 +561,13 @@ export default function Home() {
     }, 5000);
 
     // Single consolidated auth changes listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       const currentUser = session?.user ?? null;
-      console.log(`[AUTH_EVENT_RECEIVED] event: ${event}, user: ${currentUser ? currentUser.id : 'null'}`);
+      console.log(
+        `[AUTH_EVENT_RECEIVED] event: ${event}, user: ${currentUser ? currentUser.id : "null"}`,
+      );
 
       // Clear the failsafe timeout since we got a response
       clearTimeout(authTimeoutId);
@@ -593,8 +599,18 @@ export default function Home() {
 
         // Trigger first-time store profile fetch/migration
         const savedStore = localStorage.getItem("catetin-store-name");
+
+        // Backup nama guest sebelum ditimpa nama dari akun email
+        if (savedStore) {
+          localStorage.setItem("catetin-guest-store-name", savedStore);
+        }
+
         const profile = await fetchOrCreateProfile(currentUser.id, savedStore);
-        if (profile && profile.store_name && profile.store_name !== "Toko Baru") {
+        if (
+          profile &&
+          profile.store_name &&
+          profile.store_name !== "Toko Baru"
+        ) {
           setStoreName(profile.store_name);
           localStorage.setItem("catetin-store-name", profile.store_name);
         } else {
@@ -632,7 +648,15 @@ export default function Home() {
         if (event === "SIGNED_OUT") {
           setIsDemo(false);
           localStorage.removeItem("catetin-demo");
-          localStorage.removeItem("catetin-store-name");
+
+          // Restore nama guest dari backup, jangan pakai nama dari akun email
+          const guestStore = localStorage.getItem("catetin-guest-store-name");
+          if (guestStore) {
+            localStorage.setItem("catetin-store-name", guestStore);
+          } else {
+            localStorage.removeItem("catetin-store-name");
+          }
+
           setStoreName("");
           setShowLanding(true);
           fetchTransactions(null);
@@ -1074,22 +1098,29 @@ export default function Home() {
     if (typeof window === "undefined") {
       console.log("[SSR_RENDER] rendering initial loading shell");
     } else {
-      console.log("[CLIENT_MOUNT] rendering initial loading shell during hydration");
+      console.log(
+        "[CLIENT_MOUNT] rendering initial loading shell during hydration",
+      );
     }
     return <div className="min-h-screen bg-[#0C0C0B]" />;
   }
 
   // 2. Auth Loading state (only shown on client after mounting, to avoid SSR mismatch)
   if (authLoading) {
-    console.log(`[AUTH_LOADING] auth is still loading. user: ${user ? user.id : 'null'}`);
+    console.log(
+      `[AUTH_LOADING] auth is still loading. user: ${user ? user.id : "null"}`,
+    );
     return (
       <div className="min-h-screen w-full bg-[#FAF9F6] dark:bg-[#0C0C0B] flex flex-col items-center justify-center transition-colors duration-300 select-none">
         <div className="flex flex-col items-center gap-6 animate-fade-in">
           {/* Brand Logo / Icon */}
           <div className="relative">
             {/* Pulsing Outer Ring */}
-            <div className="absolute -inset-4 rounded-full bg-emerald-500/10 dark:bg-emerald-500/5 blur-xl animate-pulse" style={{ animationDuration: '3s' }} />
-            
+            <div
+              className="absolute -inset-4 rounded-full bg-emerald-500/10 dark:bg-emerald-500/5 blur-xl animate-pulse"
+              style={{ animationDuration: "3s" }}
+            />
+
             {/* Main Logo Container */}
             <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl border border-stone-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-950 shadow-md">
               <BrainCircuit className="h-10 w-10 text-emerald-500 animate-pulse" />
@@ -1113,7 +1144,9 @@ export default function Home() {
     );
   }
 
-  console.log(`[SHOW_LANDING] showLanding: ${showLanding}, [USER_STATE] user: ${user ? user.id : 'null'}, [THEME_STATE] theme: ${theme}`);
+  console.log(
+    `[SHOW_LANDING] showLanding: ${showLanding}, [USER_STATE] user: ${user ? user.id : "null"}, [THEME_STATE] theme: ${theme}`,
+  );
 
   if (showLanding) {
     return (
@@ -1209,7 +1242,7 @@ export default function Home() {
       />
 
       {isDemo && (
-        <div className="fixed top-[72px] left-0 right-0 z-35 bg-amber-500/15 backdrop-blur-md border-b border-amber-500/20 px-4 py-2 flex items-center justify-between text-xs font-bold text-amber-700 dark:text-amber-400 animate-fade-in shadow-xs">
+        <div className="fixed top-[65px] sm:top-[80px] left-0 right-0 z-35 bg-amber-500/15 backdrop-blur-md border-b border-amber-500/20 px-4 py-2 flex items-center justify-between text-xs font-bold text-amber-700 dark:text-amber-400 animate-fade-in shadow-xs">
           <div className="flex items-center gap-1.5 select-none">
             <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
             <span>Mode Demo Aktif — Menggunakan simulasi data usaha UMKM.</span>
@@ -1286,7 +1319,7 @@ export default function Home() {
         {/* Bottom nav — hides smoothly when keyboard is open */}
         <div
           className={cn(
-            "fixed bottom-0 left-0 right-0 z-40 backdrop-blur-lg bg-white/90 dark:bg-[#0E0E0E]/90 border-t border-stone-200/50 dark:border-zinc-800/60 px-8 py-3.5 flex items-center justify-around safe-area-bottom bottom-nav-transition",
+            "fixed bottom-2 left-0 right-0 z-40 backdrop-blur-lg bg-white/90 dark:bg-[#0E0E0E]/90 border-t border-stone-200/50 dark:border-zinc-800/60 px-8 py-4 flex items-center justify-around safe-area-bottom bottom-nav-transition",
             keyboardOpen && "bottom-nav-hidden",
           )}
         >
